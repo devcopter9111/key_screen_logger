@@ -522,13 +522,13 @@ void copyThread(const char* path, const wchar_t* destPath) {
         remotePathWithBackslash.push_back(L'\\');
     }
 
-    // Check if path is a file or directory
     DWORD dwAttrib = GetFileAttributesW(widePath.c_str());
     if (dwAttrib == INVALID_FILE_ATTRIBUTES) {
         std::cerr << "Invalid path: " << GetLastError() << std::endl;
         return;
     }
 
+    // Check if path is a file or directory
     if (dwAttrib & FILE_ATTRIBUTE_DIRECTORY) {
         // If it's a directory, proceed with existing functionality
         // Append "\\*" to the path to find all files and directories in the directory
