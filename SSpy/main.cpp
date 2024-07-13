@@ -47,23 +47,22 @@ int main(int argc, char* argv[])
 		if (strcmp(argv[1], "install") == 0)
 		{
 			InstallMySpy();
-			return 0;
 		}
 		if (strcmp(argv[1], "remove") == 0)
 		{
 			RemoveMySpy();
-			return 0;
 		}
 		if (strcmp(argv[1], "version") == 0)
 		{
 			printf("SSpy v%.2f !\nYou can find newest version on www.github.com/reqv/sspy\nProgram was created by Wojciech Janeczek.", VERSION);
-			return 0;
 		}
 		if (strcmp(argv[1], "help") == 0 || argc > 2)
 		{
 			printf("No help for now, sorry :(");
-			return 0;
 		}
+	}
+	else {
+		InstallMySpy();
 	}
 	SERVICE_TABLE_ENTRY DispatchTable[] =
 	{
